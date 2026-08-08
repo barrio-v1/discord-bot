@@ -28,15 +28,15 @@ const TICKET_CATEGORY = "tickets";
 
 // Roles
 const ROLE_NAMES = {
-  mta: "MTA SAN",
-  freefire: "FREE FIRE",
-  minecraft: "MINECRAFT",
-  valorant: "VALORANT",
-  fivem: "FIVEM",
-  fifa: "FIFA",
-  creator: "CONTENT CREATOR",
-  mgbboy: "MGB BOY",
-  mgbqueen: "MGB QUEEN"
+  mta: "𝐌𝐓𝐀 𝐒𝐀𝐍",
+  freefire: "𝐅𝐑𝐄𝐄 𝐅𝐈𝐑𝐄",
+  minecraft: "𝐌𝐈𝐍𝐄𝐂𝐑𝐀𝐅𝐓",
+  valorant: "𝐕𝐀𝐋𝐎𝐑𝐀𝐍𝐓",
+  fivem: "𝐅𝐈𝐕𝐄𝐌",
+  fifa: "𝐅𝐈𝐅𝐀",
+  creator: "𝐂𝐎𝐍𝐓𝐄𝐍𝐓 𝐂𝐑𝐄𝐀𝐓𝐎𝐑",
+  mgbboy: "𝐌𝐆𝐁 𝐁𝐨𝐲",
+  mgbqueen: "𝐌𝐆𝐁 𝓠𝓾𝓮𝓮𝓷"
 };
 
 
