@@ -74,6 +74,39 @@ async function sendLog(guild, embed) {
 client.once("ready", async () => {
   console.log(`✅ ${client.user.tag} is online!`);
 
+  const channel = await client.channels.fetch("1533072253736976515");
+
+  if (!channel) return;
+
+  const embed = new EmbedBuilder()
+    .setTitle("🟢 LMGHARBA Community — Minecraft Server")
+    .setDescription(`🇲🇦 **مرحبا بكم فـ LMGHARBA Community!** 🇲🇦
+
+🎮 **Minecraft Server: LmgharbaOneBlock**
+
+💻 **PC / Java:**
+
+> \`LmgharbaOneBlock.aternos.me\`
+
+📱 **Phone / Bedrock:**
+
+> **IP:** \`LmgharbaOneBlock.aternos.me\`
+> **Port:** \`19226\`
+
+🔥 **OneBlock • Survival • Community**
+👥 دخل لعب مع صحابك وعيشو المغامرة مع LMGHARBA!
+
+⚠️ تأكد من كتابة الـIP والـPort بشكل صحيح.
+
+🇲🇦 **LMGHARBA Community — ديما مجموعين!**`)
+    .setColor("Green")
+    .setTimestamp();
+
+  await channel.send({
+    embeds: [embed]
+  });
+});
+
   // Invite cache
   for (const guild of client.guilds.cache.values()) {
     try {
