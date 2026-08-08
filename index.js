@@ -74,8 +74,6 @@ async function sendLog(guild, embed) {
 client.once("ready", () => {
   console.log(`✅ ${client.user.tag} is online!`);
 });
-
-
   const channel = await client.channels.fetch("1533072253736976515");
 
   if (!channel) return;
