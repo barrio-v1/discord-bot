@@ -6,7 +6,8 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder
+  EmbedBuilder,
+  AuditLogEvent
 } = require("discord.js");
 
 const client = new Client({
@@ -14,7 +15,8 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildModeration
   ]
 });
 
@@ -22,32 +24,68 @@ const client = new Client({
 // CONFIG
 // ==========================================
 
-const WELCOME_CHANNEL = "welcome";
-const LOGS_CHANNEL = "logs";
+const WELCOME_CHANNEL_ID = "1533072216550408303";
+const LOGS_CHANNEL_ID = "1535451723189981224";
 const TICKET_CATEGORY = "tickets";
 
-// Roles
+// ==========================================
+// ROLES
+// ==========================================
+
 const ROLE_NAMES = {
-  mta: "𝐌𝐓𝐀 𝐒𝐀𝐍",
-  freefire: "𝐅𝐑𝐄𝐄 𝐅𝐈𝐑𝐄",
-  minecraft: "𝐌𝐈𝐍𝐄𝐂𝐑𝐀𝐅𝐓",
-  valorant: "𝐕𝐀𝐋𝐎𝐑𝐀𝐍𝐓",
-  fivem: "𝐅𝐈𝐕𝐄𝐌",
-  fifa: "𝐅𝐈𝐅𝐀",
   creator: "𝐂𝐎𝐍𝐓𝐄𝐍𝐓 𝐂𝐑𝐄𝐀𝐓𝐎𝐑",
+  fifa: "𝐅𝐈𝐅𝐀",
+  fivem: "𝐅𝐈𝐕𝐄𝐌",
+  valorant: "𝐕𝐀𝐋𝐎𝐑𝐀𝐍𝐓",
+  minecraft: "𝐌𝐈𝐍𝐄𝐂𝐑𝐀𝐅𝐓",
+  freefire: "𝐅𝐑𝐄𝐄 𝐅𝐈𝐑𝐄",
+  mta: "𝐌𝐓𝐀 𝐒𝐀𝐍",
   mgbboy: "𝐌𝐆𝐁 𝐁𝐨𝐲",
   mgbqueen: "𝐌𝐆𝐁 𝓠𝓾𝓮𝓮𝓷"
 };
 
+// ==========================================
+// HELPERS
+// ==========================================
+
+async function getLogsChannel(guild) {
+  return guild.channels.cache.get(LOGS_CHANNEL_ID);
+}
+
+async function sendLog(guild, embed) {
+  try {
+    const logs = await getLogsChannel(guild);
+
+    if (!logs) {
+      console.log("❌ Logs channel not found.");
+      return;
+    }
+
+    await logs.send({ embeds: [embed] });
+  } catch (error) {
+    console.error("LOG ERROR:", error);
+  }
+}
 
 // ==========================================
-// BOT READY
+// READY
 // ==========================================
 
-client.once("ready", () => {
+client.once("ready", async () => {
   console.log(`✅ ${client.user.tag} is online!`);
-});
 
+  // Invite cache
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const invites = await guild.invites.fetch();
+      guild.inviteCache = new Map(
+        invites.map(invite => [invite.code, invite.uses || 0])
+      );
+    } catch (error) {
+      console.log(`⚠️ Could not fetch invites for ${guild.name}`);
+    }
+  }
+});
 
 // ==========================================
 // WELCOME
@@ -55,105 +93,341 @@ client.once("ready", () => {
 
 client.on("guildMemberAdd", async (member) => {
   try {
-    const channel = member.guild.channels.cache.find(
-      ch => ch.name === WELCOME_CHANNEL
+    const welcomeChannel = member.guild.channels.cache.get(
+      WELCOME_CHANNEL_ID
     );
 
-    if (!channel) return;
+    // Find inviter
+    let inviter = "Unknown";
 
-    const embed = new EmbedBuilder()
-      .setTitle(`👋 WELCOME TO ${member.guild.name.toUpperCase()}`)
-      .setDescription(
-        `Bienvenue ${member} ! 🎉\n\n` +
-        `🔥 You're member **#${member.guild.memberCount}**!\n\n` +
-        `📜 Don't forget to read the rules.\n` +
-        `🎫 Need help? Open a ticket.\n` +
-        `🎮 Choose your roles with the role panel.`
-      )
-      .setThumbnail(
-        member.user.displayAvatarURL({
-          dynamic: true,
-          size: 512
-        })
-      )
-      .setFooter({
-        text: `${member.guild.name} • Welcome System`
-      })
-      .setTimestamp();
+    try {
+      const oldInvites = member.guild.inviteCache || new Map();
+      const newInvites = await member.guild.invites.fetch();
 
-    await channel.send({
-      content: `🎉 Welcome ${member}!`,
-      embeds: [embed]
-    });
+      const usedInvite = newInvites.find(invite => {
+        const oldUses = oldInvites.get(invite.code) || 0;
+        return (invite.uses || 0) > oldUses;
+      });
 
-    // LOG
-    const logs = member.guild.channels.cache.find(
-      ch => ch.name === LOGS_CHANNEL
-    );
+      if (usedInvite && usedInvite.inviter) {
+        inviter = `${usedInvite.inviter}`;
+      }
 
-    if (logs) {
-      const logEmbed = new EmbedBuilder()
-        .setTitle("📥 Member Joined")
+      member.guild.inviteCache = new Map(
+        newInvites.map(invite => [invite.code, invite.uses || 0])
+      );
+    } catch (error) {
+      console.log("INVITE CHECK ERROR:", error);
+    }
+
+    // Welcome message
+    if (welcomeChannel) {
+      const embed = new EmbedBuilder()
+        .setTitle(`👑 Welcome To ${member.guild.name}`)
         .setDescription(
-          `${member} joined the server.`
+          `## 👋 Welcome ${member}!\n\n` +
+          `🎉 **Welcome To Community Lmghar!**\n\n` +
+          `👑 Pls Use Tag **(𝐌𝐆𝐁)**\n\n` +
+          `👤 **User:** ${member.user.tag}\n` +
+          `🆔 **ID:** ${member.id}\n` +
+          `📅 **Joined:** <t:${Math.floor(Date.now() / 1000)}:F>\n` +
+          `📨 **Invited by:** ${inviter}`
         )
-        .addFields(
-          {
-            name: "👤 User",
-            value: `${member.user.tag}`,
-            inline: true
-          },
-          {
-            name: "🆔 ID",
-            value: member.id,
-            inline: true
-          }
+        .setThumbnail(
+          member.user.displayAvatarURL({
+            extension: "png",
+            size: 512
+          })
         )
-        .setThumbnail(member.user.displayAvatarURL())
+        .setFooter({
+          text: "LMGHARBA Community • Welcome"
+        })
         .setTimestamp();
 
-      await logs.send({
-        embeds: [logEmbed]
+      await welcomeChannel.send({
+        content: `👑 **Welcome To Community Lmghar Pls Use Tag (𝐌𝐆𝐁) 👑**\nWelcome ${member}!`,
+        embeds: [embed]
       });
     }
+
+    // Join log
+    const logEmbed = new EmbedBuilder()
+      .setTitle("📥 MEMBER JOINED")
+      .setDescription(`${member} joined the server.`)
+      .addFields(
+        {
+          name: "👤 User",
+          value: `${member.user.tag}`,
+          inline: true
+        },
+        {
+          name: "🆔 ID",
+          value: member.id,
+          inline: true
+        },
+        {
+          name: "📨 Invited By",
+          value: inviter,
+          inline: true
+        },
+        {
+          name: "👥 Members",
+          value: `${member.guild.memberCount}`,
+          inline: true
+        }
+      )
+      .setThumbnail(member.user.displayAvatarURL({ extension: "png" }))
+      .setTimestamp();
+
+    await sendLog(member.guild, logEmbed);
 
   } catch (error) {
     console.error("WELCOME ERROR:", error);
   }
 });
 
-
 // ==========================================
-// MEMBER LEAVE LOG
+// MEMBER LEAVE
 // ==========================================
 
 client.on("guildMemberRemove", async (member) => {
   try {
-    const logs = member.guild.channels.cache.find(
-      ch => ch.name === LOGS_CHANNEL
-    );
-
-    if (!logs) return;
-
     const embed = new EmbedBuilder()
-      .setTitle("📤 Member Left")
+      .setTitle("📤 MEMBER LEFT")
       .setDescription(`${member.user.tag} left the server.`)
-      .addFields({
-        name: "🆔 ID",
-        value: member.id
-      })
-      .setThumbnail(member.user.displayAvatarURL())
+      .addFields(
+        {
+          name: "👤 User",
+          value: member.user.tag,
+          inline: true
+        },
+        {
+          name: "🆔 ID",
+          value: member.id,
+          inline: true
+        }
+      )
+      .setThumbnail(member.user.displayAvatarURL({ extension: "png" }))
       .setTimestamp();
 
-    await logs.send({
-      embeds: [embed]
-    });
+    await sendLog(member.guild, embed);
 
   } catch (error) {
     console.error("LEAVE LOG ERROR:", error);
   }
 });
 
+// ==========================================
+// MESSAGE DELETE LOG
+// ==========================================
+
+client.on("messageDelete", async (message) => {
+  try {
+    if (!message.guild) return;
+    if (message.author?.bot) return;
+
+    const content = message.content
+      ? message.content.slice(0, 1000)
+      : "No text content";
+
+    const embed = new EmbedBuilder()
+      .setTitle("🗑️ MESSAGE DELETED")
+      .setDescription(
+        `A message was deleted in ${message.channel}.`
+      )
+      .addFields(
+        {
+          name: "👤 Author",
+          value: `${message.author || "Unknown"}`,
+          inline: true
+        },
+        {
+          name: "📍 Channel",
+          value: `${message.channel}`,
+          inline: true
+        },
+        {
+          name: "💬 Content",
+          value: content
+        }
+      )
+      .setTimestamp();
+
+    await sendLog(message.guild, embed);
+
+  } catch (error) {
+    console.error("MESSAGE DELETE LOG ERROR:", error);
+  }
+});
+
+// ==========================================
+// MESSAGE EDIT LOG
+// ==========================================
+
+client.on("messageUpdate", async (oldMessage, newMessage) => {
+  try {
+    if (!oldMessage.guild) return;
+    if (oldMessage.author?.bot) return;
+
+    if (oldMessage.content === newMessage.content) return;
+
+    const oldContent = oldMessage.content || "No content";
+    const newContent = newMessage.content || "No content";
+
+    const embed = new EmbedBuilder()
+      .setTitle("✏️ MESSAGE EDITED")
+      .setDescription(
+        `${oldMessage.author || "Unknown"} edited a message in ${oldMessage.channel}.`
+      )
+      .addFields(
+        {
+          name: "Before",
+          value: oldContent.slice(0, 1000)
+        },
+        {
+          name: "After",
+          value: newContent.slice(0, 1000)
+        }
+      )
+      .setTimestamp();
+
+    await sendLog(oldMessage.guild, embed);
+
+  } catch (error) {
+    console.error("MESSAGE EDIT LOG ERROR:", error);
+  }
+});
+
+// ==========================================
+// ROLE CREATE
+// ==========================================
+
+client.on("roleCreate", async (role) => {
+  const embed = new EmbedBuilder()
+    .setTitle("🟢 ROLE CREATED")
+    .setDescription(`A new role was created.`)
+    .addFields(
+      {
+        name: "👑 Role",
+        value: `${role}`,
+        inline: true
+      },
+      {
+        name: "🆔 ID",
+        value: role.id,
+        inline: true
+      }
+    )
+    .setTimestamp();
+
+  await sendLog(role.guild, embed);
+});
+
+// ==========================================
+// ROLE DELETE
+// ==========================================
+
+client.on("roleDelete", async (role) => {
+  const embed = new EmbedBuilder()
+    .setTitle("🔴 ROLE DELETED")
+    .setDescription(`A role was deleted.`)
+    .addFields(
+      {
+        name: "👑 Role",
+        value: role.name,
+        inline: true
+      },
+      {
+        name: "🆔 ID",
+        value: role.id,
+        inline: true
+      }
+    )
+    .setTimestamp();
+
+  await sendLog(role.guild, embed);
+});
+
+// ==========================================
+// CHANNEL CREATE
+// ==========================================
+
+client.on("channelCreate", async (channel) => {
+  if (!channel.guild) return;
+
+  const embed = new EmbedBuilder()
+    .setTitle("🟢 CHANNEL CREATED")
+    .setDescription(`A new channel was created.`)
+    .addFields(
+      {
+        name: "📍 Channel",
+        value: `${channel}`,
+        inline: true
+      },
+      {
+        name: "📂 Type",
+        value: `${channel.type}`,
+        inline: true
+      }
+    )
+    .setTimestamp();
+
+  await sendLog(channel.guild, embed);
+});
+
+// ==========================================
+// CHANNEL DELETE
+// ==========================================
+
+client.on("channelDelete", async (channel) => {
+  if (!channel.guild) return;
+
+  const embed = new EmbedBuilder()
+    .setTitle("🔴 CHANNEL DELETED")
+    .setDescription(`A channel was deleted.`)
+    .addFields({
+      name: "📍 Channel",
+      value: channel.name
+    })
+    .setTimestamp();
+
+  await sendLog(channel.guild, embed);
+});
+
+// ==========================================
+// BAN LOG
+// ==========================================
+
+client.on("guildBanAdd", async (ban) => {
+  const embed = new EmbedBuilder()
+    .setTitle("🔨 MEMBER BANNED")
+    .setDescription(`${ban.user.tag} was banned.`)
+    .addFields({
+      name: "🆔 ID",
+      value: ban.user.id
+    })
+    .setThumbnail(ban.user.displayAvatarURL({ extension: "png" }))
+    .setTimestamp();
+
+  await sendLog(ban.guild, embed);
+});
+
+// ==========================================
+// UNBAN LOG
+// ==========================================
+
+client.on("guildBanRemove", async (ban) => {
+  const embed = new EmbedBuilder()
+    .setTitle("🔓 MEMBER UNBANNED")
+    .setDescription(`${ban.user.tag} was unbanned.`)
+    .addFields({
+      name: "🆔 ID",
+      value: ban.user.id
+    })
+    .setTimestamp();
+
+  await sendLog(ban.guild, embed);
+});
 
 // ==========================================
 // COMMANDS
@@ -161,7 +435,6 @@ client.on("guildMemberRemove", async (member) => {
 
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
-
 
   // ========================================
   // PING
@@ -171,15 +444,13 @@ client.on("messageCreate", async (message) => {
     return message.reply("🏓 Pong !");
   }
 
-
   // ========================================
   // RULES
   // ========================================
 
   if (message.content === "!rules") {
 
-    const rules = `# 📜 LMGHARBA Community - Rules
-
+    const rules = `
 **1. I7tiram faw9 kolchi.**
 Kol member khaso y7tarem ga3 l'a3da2 w l'administration.
 
@@ -213,17 +484,19 @@ T3awen m3a l'a3da2, stamt3, w b3ed 3la lmachakil.
 ━━━━━━━━━━━━━━━━━━
 
 ⚠️ **Awel Mra:** Warning
+
 ⏳ **Tani Mra:** Mute / Kick
+
 🚫 **Moukhalafat Kbira:** Temporary Ban aw Permanent Ban
 
 ━━━━━━━━━━━━━━━━━━
 
-⚠️ Please respect everyone and enjoy the community!`;
+⚠️ **Please respect everyone and enjoy the community!**
+`;
 
     const embed = new EmbedBuilder()
       .setTitle("📜 LMGHARBA Community — Rules")
       .setDescription(rules)
-      .setColor("Blue")
       .setFooter({
         text: "LMGHARBA Community • Respect Everyone"
       })
@@ -233,7 +506,6 @@ T3awen m3a l'a3da2, stamt3, w b3ed 3la lmachakil.
       embeds: [embed]
     });
   }
-
 
   // ========================================
   // TICKET PANEL
@@ -250,7 +522,6 @@ T3awen m3a l'a3da2, stamt3, w b3ed 3la lmachakil.
         "🛠️ Problems\n" +
         "📩 Questions"
       )
-      .setColor("Blue")
       .setFooter({
         text: "LMGHARBA Support"
       });
@@ -270,7 +541,6 @@ T3awen m3a l'a3da2, stamt3, w b3ed 3la lmachakil.
     });
   }
 
-
   // ========================================
   // ROLE PANEL
   // ========================================
@@ -278,71 +548,79 @@ T3awen m3a l'a3da2, stamt3, w b3ed 3la lmachakil.
   if (message.content === "!roles") {
 
     const embed = new EmbedBuilder()
-      .setTitle("🎮 Choose Your Roles")
+      .setTitle("🎮 CHOOSE YOUR ROLES")
       .setDescription(
         "اختار الـRole ديالك بالضغط على الزر.\n\n" +
-        "🎮 **Games**\n" +
-        "MTA SAN • FREE FIRE • MINECRAFT • VALORANT\n" +
-        "FIVEM • FIFA\n\n" +
-        "👑 **Community**\n" +
-        "CONTENT CREATOR • MGB BOY • MGB QUEEN"
+        "🎮 **Games**\n\n" +
+        "𝐅𝐈𝐅𝐀\n" +
+        "𝐅𝐈𝐕𝐄𝐌\n" +
+        "𝐕𝐀𝐋𝐎𝐑𝐀𝐍𝐓\n" +
+        "𝐌𝐈𝐍𝐄𝐂𝐑𝐀𝐅𝐓\n" +
+        "𝐅𝐑𝐄𝐄 𝐅𝐈𝐑𝐄\n" +
+        "𝐌𝐓𝐀 𝐒𝐀𝐍\n\n" +
+        "👑 **Community**\n\n" +
+        "𝐂𝐎𝐍𝐓𝐄𝐍𝐓 𝐂𝐑𝐄𝐀𝐓𝐎𝐑\n" +
+        "𝐌𝐆𝐁 𝐁𝐨𝐲\n" +
+        "𝐌𝐆𝐁 𝓠𝓾𝓮𝓮𝓷"
       )
-      .setColor("Blue");
+      .setFooter({
+        text: "LMGHARBA Community • Role System"
+      });
 
     const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId("role_mta")
-        .setLabel("MTA SAN")
-        .setEmoji("🎮")
-        .setStyle(ButtonStyle.Primary),
-
-      new ButtonBuilder()
-        .setCustomId("role_freefire")
-        .setLabel("FREE FIRE")
-        .setEmoji("🔥")
-        .setStyle(ButtonStyle.Primary),
-
-      new ButtonBuilder()
-        .setCustomId("role_minecraft")
-        .setLabel("MINECRAFT")
-        .setEmoji("⛏️")
-        .setStyle(ButtonStyle.Success),
-
-      new ButtonBuilder()
-        .setCustomId("role_valorant")
-        .setLabel("VALORANT")
-        .setEmoji("🎯")
-        .setStyle(ButtonStyle.Danger),
-
-      new ButtonBuilder()
-        .setCustomId("role_fivem")
-        .setLabel("FIVEM")
-        .setEmoji("🚗")
-        .setStyle(ButtonStyle.Secondary)
-    );
-
-    const row2 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("role_fifa")
-        .setLabel("FIFA")
-        .setEmoji("⚽")
-        .setStyle(ButtonStyle.Success),
-
-      new ButtonBuilder()
         .setCustomId("role_creator")
-        .setLabel("CONTENT CREATOR")
+        .setLabel("𝐂𝐎𝐍𝐓𝐄𝐍𝐓 𝐂𝐑𝐄𝐀𝐓𝐎𝐑")
         .setEmoji("🎥")
         .setStyle(ButtonStyle.Primary),
 
       new ButtonBuilder()
+        .setCustomId("role_fifa")
+        .setLabel("𝐅𝐈𝐅𝐀")
+        .setEmoji("⚽")
+        .setStyle(ButtonStyle.Success),
+
+      new ButtonBuilder()
+        .setCustomId("role_fivem")
+        .setLabel("𝐅𝐈𝐕𝐄𝐌")
+        .setEmoji("🚗")
+        .setStyle(ButtonStyle.Secondary),
+
+      new ButtonBuilder()
+        .setCustomId("role_valorant")
+        .setLabel("𝐕𝐀𝐋𝐎𝐑𝐀𝐍𝐓")
+        .setEmoji("🎯")
+        .setStyle(ButtonStyle.Danger),
+
+      new ButtonBuilder()
+        .setCustomId("role_minecraft")
+        .setLabel("𝐌𝐈𝐍𝐄𝐂𝐑𝐀𝐅𝐓")
+        .setEmoji("⛏️")
+        .setStyle(ButtonStyle.Success)
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("role_freefire")
+        .setLabel("𝐅𝐑𝐄𝐄 𝐅𝐈𝐑𝐄")
+        .setEmoji("🔥")
+        .setStyle(ButtonStyle.Danger),
+
+      new ButtonBuilder()
+        .setCustomId("role_mta")
+        .setLabel("𝐌𝐓𝐀 𝐒𝐀𝐍")
+        .setEmoji("🎮")
+        .setStyle(ButtonStyle.Primary),
+
+      new ButtonBuilder()
         .setCustomId("role_mgbboy")
-        .setLabel("MGB BOY")
+        .setLabel("𝐌𝐆𝐁 𝐁𝐨𝐲")
         .setEmoji("👦")
         .setStyle(ButtonStyle.Secondary),
 
       new ButtonBuilder()
         .setCustomId("role_mgbqueen")
-        .setLabel("MGB QUEEN")
+        .setLabel("𝐌𝐆𝐁 𝓠𝓾𝓮𝓮𝓷")
         .setEmoji("👑")
         .setStyle(ButtonStyle.Danger)
     );
@@ -354,7 +632,6 @@ T3awen m3a l'a3da2, stamt3, w b3ed 3la lmachakil.
   }
 });
 
-
 // ==========================================
 // BUTTONS
 // ==========================================
@@ -362,7 +639,6 @@ T3awen m3a l'a3da2, stamt3, w b3ed 3la lmachakil.
 client.on("interactionCreate", async (interaction) => {
 
   if (!interaction.isButton()) return;
-
 
   // ========================================
   // OPEN TICKET
@@ -443,8 +719,7 @@ client.on("interactionCreate", async (interaction) => {
         `Bienvenue ${interaction.user} !\n\n` +
         `شرح لينا المشكل ديالك هنا، والـStaff غادي يعاونك.\n\n` +
         `🔒 ملي تسالي ضغط على **Close Ticket**.`
-      )
-      .setColor("Blue");
+      );
 
     await channel.send({
       content: `${interaction.user}`,
@@ -452,12 +727,24 @@ client.on("interactionCreate", async (interaction) => {
       components: [row]
     });
 
+    const logEmbed = new EmbedBuilder()
+      .setTitle("🎫 TICKET OPENED")
+      .setDescription(
+        `${interaction.user} opened a ticket.`
+      )
+      .addFields({
+        name: "📍 Ticket",
+        value: `${channel}`
+      })
+      .setTimestamp();
+
+    await sendLog(guild, logEmbed);
+
     return interaction.reply({
       content: `✅ Ticket créé : ${channel}`,
       ephemeral: true
     });
   }
-
 
   // ========================================
   // CLOSE TICKET
@@ -465,15 +752,32 @@ client.on("interactionCreate", async (interaction) => {
 
   if (interaction.customId === "close_ticket") {
 
-    await interaction.reply("🔒 Ticket غادي يتسد فـ3 ثواني...");
+    const channel = interaction.channel;
+    const guild = interaction.guild;
+
+    await interaction.reply(
+      "🔒 Ticket غادي يتسد فـ3 ثواني..."
+    );
+
+    const logEmbed = new EmbedBuilder()
+      .setTitle("🔒 TICKET CLOSED")
+      .setDescription(
+        `Ticket closed by ${interaction.user}.`
+      )
+      .addFields({
+        name: "📍 Channel",
+        value: channel.name
+      })
+      .setTimestamp();
+
+    await sendLog(guild, logEmbed);
 
     setTimeout(() => {
-      interaction.channel.delete().catch(() => {});
+      channel.delete().catch(() => {});
     }, 3000);
 
     return;
   }
-
 
   // ========================================
   // ROLES
@@ -503,6 +807,15 @@ client.on("interactionCreate", async (interaction) => {
 
         await interaction.member.roles.remove(role);
 
+        const embed = new EmbedBuilder()
+          .setTitle("➖ ROLE REMOVED")
+          .setDescription(
+            `${interaction.user} removed **${roleName}**.`
+          )
+          .setTimestamp();
+
+        await sendLog(interaction.guild, embed);
+
         return interaction.reply({
           content: `➖ تحيد ليك role **${roleName}**.`,
           ephemeral: true
@@ -511,6 +824,15 @@ client.on("interactionCreate", async (interaction) => {
       } else {
 
         await interaction.member.roles.add(role);
+
+        const embed = new EmbedBuilder()
+          .setTitle("➕ ROLE ADDED")
+          .setDescription(
+            `${interaction.user} received **${roleName}**.`
+          )
+          .setTimestamp();
+
+        await sendLog(interaction.guild, embed);
 
         return interaction.reply({
           content: `✅ تزادت ليك role **${roleName}**.`,
@@ -523,14 +845,25 @@ client.on("interactionCreate", async (interaction) => {
       console.error("ROLE ERROR:", error);
 
       return interaction.reply({
-        content: "❌ ماقدرتش نبدل ليك الـRole. تأكد من permissions وترتيب الـRoles.",
+        content:
+          "❌ ماقدرتش نبدل ليك الـRole. تأكد من permissions وترتيب الـRoles.",
         ephemeral: true
       });
     }
   }
-
 });
 
+// ==========================================
+// ERROR HANDLING
+// ==========================================
+
+client.on("error", error => {
+  console.error("DISCORD CLIENT ERROR:", error);
+});
+
+process.on("unhandledRejection", error => {
+  console.error("UNHANDLED REJECTION:", error);
+});
 
 // ==========================================
 // LOGIN
