@@ -126,7 +126,7 @@ client.on("guildMemberAdd", async (member) => {
         .setTitle(`👑 Welcome To ${member.guild.name}`)
         .setDescription(
           `## 👋 Welcome ${member}!\n\n` +
-          `🎉 **Welcome To Community Lmghar!**\n\n` +
+          `🎉 **Welcome To Community Lmgharba!**\n\n` +
           `👑 Pls Use Tag **(𝐌𝐆𝐁)**\n\n` +
           `👤 **User:** ${member.user.tag}\n` +
           `🆔 **ID:** ${member.id}\n` +
