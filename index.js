@@ -110,7 +110,7 @@ client.once("ready", async () => {
   // Invite cache
   for (const guild of client.guilds.cache.values()) {
     try {
-      const invites = await guild.invites.fetch();
+      const invites = await guild.invites.fetch().catch(() => new Map());
       guild.inviteCache = new Map(
         invites.map(invite => [invite.code, invite.uses || 0])
       );
