@@ -1,13 +1,13 @@
 {
-  "name": "discord-bot",
+  "name": "mgb-bot",
   "version": "1.0.0",
-  "description": "My Discord bot",
+  "description": "MGB Community Discord Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.21.0",
-    "@discordjs/voice": "^0.19.0"
+    "@discordjs/voice": "^0.18.0",
+    "discord.js": "^14.21.0"
   }
 }
