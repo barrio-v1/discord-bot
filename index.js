@@ -4,16 +4,13 @@ const {
     Partials,
     EmbedBuilder,
     ActionRowBuilder,
-    StringSelectMenuBuilder,
     ButtonBuilder,
     ButtonStyle,
     PermissionsBitField,
     ChannelType
 } = require("discord.js");
 
-const {
-    joinVoiceChannel
-} = require("@discordjs/voice");
+const { joinVoiceChannel } = require("@discordjs/voice");
 
 // ==============================
 // CONFIG
@@ -22,10 +19,8 @@ const {
 const TOKEN = process.env.TOKEN;
 const PREFIX = "!";
 
-// Minecraft Channel
+// Channel IDs
 const MINECRAFT_CHANNEL_ID = "1533072253736976515";
-
-// Voice Channel
 const VOICE_CHANNEL_ID = "1533072305759060029";
 
 // Channel names
@@ -82,23 +77,27 @@ function findRole(guild, name) {
     );
 }
 
+function roleIdFromName(name) {
+    return `role_${ROLES.indexOf(name)}`;
+}
+
 async function sendLog(guild, title, description) {
     try {
         const logs = findChannel(guild, LOGS_CHANNEL_NAME);
 
-        if (!logs) return;
+        if (!logs || !logs.isTextBased()) {
+            console.log(`⚠️ Logs channel not found in ${guild.name}`);
+            return;
+        }
 
         const embed = new EmbedBuilder()
             .setTitle(title)
             .setDescription(description)
             .setTimestamp();
 
-        await logs.send({
-            embeds: [embed]
-        });
-
+        await logs.send({ embeds: [embed] });
     } catch (error) {
-        console.log("LOG ERROR:", error);
+        console.log("❌ LOG ERROR:", error);
     }
 }
 
@@ -107,26 +106,20 @@ async function sendLog(guild, title, description) {
 // ==============================
 
 client.once("ready", async () => {
-
     console.log(`✅ ${client.user.tag} is online!`);
 
-    client.user.setActivity("LMGHARBA Community");
-
-    // ==========================
-    // VOICE
-    // ==========================
-
     try {
+        client.user.setActivity("LMGHARBA Community");
+    } catch {}
 
-        const voiceChannel = await client.channels.fetch(
-            VOICE_CHANNEL_ID
-        );
+    // VOICE
+    try {
+        const voiceChannel = await client.channels.fetch(VOICE_CHANNEL_ID);
 
         if (
             voiceChannel &&
             voiceChannel.type === ChannelType.GuildVoice
         ) {
-
             joinVoiceChannel({
                 channelId: voiceChannel.id,
                 guildId: voiceChannel.guild.id,
@@ -135,84 +128,21 @@ client.once("ready", async () => {
                 selfMute: true
             });
 
-            console.log("🎙️ Bot joined the voice channel!");
-
+            console.log(`🎙️ Joined VC: ${voiceChannel.name}`);
         } else {
-
             console.log("❌ Voice channel not found.");
-
         }
-
     } catch (error) {
-
         console.log("❌ Voice error:", error);
-
     }
-
-    // ==========================
-    // MINECRAFT MESSAGE
-    // ==========================
-
-    try {
-
-        const channel = await client.channels.fetch(
-            MINECRAFT_CHANNEL_ID
-        );
-
-        if (channel) {
-
-            const embed = new EmbedBuilder()
-                .setTitle("🟢 LMGHARBA Community — Minecraft Server")
-                .setDescription(
-                    `🇲🇦 **مرحبا بكم فـ LMGHARBA Community!** 🇲🇦
-
-🎮 **Minecraft Server: LmgharbaOneBlock**
-
-💻 **PC / Java:**
-
-> \`LmgharbaOneBlock.aternos.me\`
-
-📱 **Phone / Bedrock:**
-
-> **IP:** \`LmgharbaOneBlock.aternos.me\`
-> **Port:** \`19226\`
-
-🔥 **OneBlock • Survival • Community**
-
-👥 دخل لعب مع صحابك وعيشو المغامرة مع LMGHARBA!
-
-⚠️ تأكد من كتابة الـIP والـPort بشكل صحيح.
-
-🇲🇦 **LMGHARBA Community — ديما مجموعين!**`
-                )
-                .setTimestamp();
-
-            await channel.send({
-                embeds: [embed]
-            });
-
-            console.log("⛏️ Minecraft message sent!");
-
-        }
-
-    } catch (error) {
-
-        console.log("❌ Minecraft error:", error);
-
-    }
-
-    // ==========================
-    // PANELS
-    // ==========================
 
     for (const guild of client.guilds.cache.values()) {
-
         await sendRules(guild);
         await sendRoles(guild);
         await sendTicketPanel(guild);
-
     }
 
+    console.log(`🏠 Connected to ${client.guilds.cache.size} server(s).`);
 });
 
 // ==============================
@@ -220,20 +150,17 @@ client.once("ready", async () => {
 // ==============================
 
 client.on("guildMemberAdd", async member => {
-
     try {
-
         const channel = findChannel(
             member.guild,
             WELCOME_CHANNEL_NAME
         );
 
-        if (!channel) return;
-
-        const embed = new EmbedBuilder()
-            .setTitle("👋 Welcome to LMGHARBA Community!")
-            .setDescription(
-                `🇲🇦 مرحبا ${member}!
+        if (channel && channel.isTextBased()) {
+            const embed = new EmbedBuilder()
+                .setTitle("👋 Welcome to LMGHARBA Community!")
+                .setDescription(
+                    `🇲🇦 مرحبا ${member}!
 
 نتمنى ليك وقت زوين معانا ❤️
 
@@ -241,30 +168,22 @@ client.on("guildMemberAdd", async member => {
 🔥 **Community**
 🎫 **Tickets**
 🎭 **Choose your roles**
-
 📜 متنساش تقرا القوانين ديال السيرفر.`
-            )
-            .setThumbnail(
-                member.user.displayAvatarURL()
-            )
-            .setTimestamp();
+                )
+                .setThumbnail(member.user.displayAvatarURL())
+                .setTimestamp();
 
-        await channel.send({
-            embeds: [embed]
-        });
+            await channel.send({ embeds: [embed] });
+        }
 
         await sendLog(
             member.guild,
             "📥 Member Joined",
             `${member.user.tag} دخل للسيرفر.`
         );
-
     } catch (error) {
-
-        console.log("WELCOME ERROR:", error);
-
+        console.log("❌ WELCOME ERROR:", error);
     }
-
 });
 
 // ==============================
@@ -272,13 +191,15 @@ client.on("guildMemberAdd", async member => {
 // ==============================
 
 client.on("guildMemberRemove", async member => {
-
-    await sendLog(
-        member.guild,
-        "📤 Member Left",
-        `${member.user.tag} خرج من السيرفر.`
-    );
-
+    try {
+        await sendLog(
+            member.guild,
+            "📤 Member Left",
+            `${member.user.tag} خرج من السيرفر.`
+        );
+    } catch (error) {
+        console.log("❌ LEAVE ERROR:", error);
+    }
 });
 
 // ==============================
@@ -286,15 +207,13 @@ client.on("guildMemberRemove", async member => {
 // ==============================
 
 async function sendRules(guild) {
-
     try {
-
         const channel = findChannel(
             guild,
             RULES_CHANNEL_NAME
         );
 
-        if (!channel) return;
+        if (!channel || !channel.isTextBased()) return;
 
         const embed = new EmbedBuilder()
             .setTitle("📜 LMGHARBA Community - Rules")
@@ -315,7 +234,7 @@ Matncher 7ta server, Discord, aw page bla idn mn l'administration.
 Ay wa7d tst3mel cheat, hack, aw exploit ghadi yt3a9eb.
 
 **6. Ista3mel Channel lmonasib.**
-Kol topic 3ando channel dyalo, matkhaletch lmawadi3.
+Kol topic 3ando channel dyalo.
 
 **7. 7tarem l'Administration.**
 Ila 3andek mochkil, ft7 ticket aw hder m3a staff b i7tiram.
@@ -332,88 +251,86 @@ T3awen m3a l'a3da2, stamt3, w b3ed 3la lmachakil.
 ━━━━━━━━━━━━━━━━━━
 
 ⚠️ **Awel Mra:** Warning.
-
 ⏳ **Tani Mra:** Mute / Kick.
-
-🚫 **Moukhalafat Kbira:** Temporary Ban aw Permanent Ban.
-
-||@everyone @here||`
+🚫 **Moukhalafat Kbira:** Temporary Ban aw Permanent Ban.`
             )
             .setTimestamp();
 
-        await channel.send({
-            embeds: [embed]
-        });
-
+        await channel.send({ embeds: [embed] });
     } catch (error) {
-
-        console.log("RULES ERROR:", error);
-
+        console.log("❌ RULES ERROR:", error);
     }
-
 }
 
 // ==============================
 // ROLES
 // ==============================
 
+function makeRoleButton(roleName) {
+    return new ButtonBuilder()
+        .setCustomId(roleIdFromName(roleName))
+        .setLabel(roleName)
+        .setStyle(ButtonStyle.Secondary);
+}
+
 async function sendRoles(guild) {
-
     try {
-
         const channel = findChannel(
             guild,
             ROLE_CHANNEL_NAME
         );
 
-        if (!channel) return;
+        if (!channel || !channel.isTextBased()) return;
 
-        const menu = new StringSelectMenuBuilder()
-            .setCustomId("role_select")
-            .setPlaceholder("🎭 اختار الـRole ديالك")
-            .addOptions(
-                ROLES.map(role => ({
-                    label: role,
-                    value: role
-                }))
+        const rows = [];
+
+        for (let i = 0; i < ROLES.length; i += 5) {
+            const row = new ActionRowBuilder().addComponents(
+                ROLES
+                    .slice(i, i + 5)
+                    .map(makeRoleButton)
             );
 
-        const row = new ActionRowBuilder()
-            .addComponents(menu);
+            rows.push(row);
+        }
 
         const embed = new EmbedBuilder()
-            .setTitle("🎭 LMGHARBA Community — Roles")
+            .setTitle("🎭 Choose Your Roles")
             .setDescription(
-                `اختار الـRole ديالك من اللائحة لتحت 👇`
-            );
+                `اختار الـRole ديالك بالضغط على الزر 👇
+
+🎮 **Games**
+MTA SAN • FREE FIRE • MINECRAFT • VALORANT
+FIVEM • FIFA
+
+👑 **Community**
+CONTENT CREATOR • MGB BOY • MGB QUEEN`
+            )
+            .setTimestamp();
 
         await channel.send({
             embeds: [embed],
-            components: [row]
+            components: rows
         });
 
+        console.log(`🎭 Roles panel sent in ${guild.name}`);
     } catch (error) {
-
-        console.log("ROLE ERROR:", error);
-
+        console.log("❌ ROLE PANEL ERROR:", error);
     }
-
 }
 
 // ==============================
-// TICKET PANEL
+// TICKET
 // ==============================
 
 async function sendTicketPanel(guild) {
-
     try {
-
         const channel = findChannel(
             guild,
             TICKET_CHANNEL_NAME
         );
 
-        if (!channel) return;
+        if (!channel || !channel.isTextBased()) return;
 
         const button = new ButtonBuilder()
             .setCustomId("create_ticket")
@@ -436,13 +353,9 @@ async function sendTicketPanel(guild) {
             embeds: [embed],
             components: [row]
         });
-
     } catch (error) {
-
-        console.log("TICKET ERROR:", error);
-
+        console.log("❌ TICKET PANEL ERROR:", error);
     }
-
 }
 
 // ==============================
@@ -450,16 +363,29 @@ async function sendTicketPanel(guild) {
 // ==============================
 
 client.on("interactionCreate", async interaction => {
-
     try {
 
-        // ROLE MENU
+        // ROLE BUTTON
         if (
-            interaction.isStringSelectMenu() &&
-            interaction.customId === "role_select"
+            interaction.isButton() &&
+            interaction.customId.startsWith("role_")
         ) {
+            const roleIndex = Number(
+                interaction.customId.replace("role_", "")
+            );
 
-            const roleName = interaction.values[0];
+            const roleName = ROLES[roleIndex];
+
+            if (!roleName) {
+                return interaction.reply({
+                    content: "❌ هاد الـRole ما بقاتش موجودة.",
+                    ephemeral: true
+                });
+            }
+
+            await interaction.deferReply({
+                ephemeral: true
+            });
 
             const role = findRole(
                 interaction.guild,
@@ -467,36 +393,50 @@ client.on("interactionCreate", async interaction => {
             );
 
             if (!role) {
-
-                return interaction.reply({
+                return interaction.editReply({
                     content:
-                        `❌ Role **${roleName}** ما لقيتهاش.`,
-                    ephemeral: true
+                        `❌ ما لقيتش Role: **${roleName}**`
                 });
+            }
 
+            const botMember = interaction.guild.members.me;
+
+            if (!botMember) {
+                return interaction.editReply({
+                    content:
+                        "❌ ما قدرتش نلقى Member ديال البوت."
+                });
+            }
+
+            if (
+                role.managed ||
+                role.position >= botMember.roles.highest.position
+            ) {
+                return interaction.editReply({
+                    content:
+                        `❌ ما نقدرش نعطيك **${roleName}**.\n` +
+                        `خاص رتبة البوت تكون فوق هاد الـRole.`
+                });
             }
 
             if (
                 interaction.member.roles.cache.has(role.id)
             ) {
-
                 await interaction.member.roles.remove(role);
 
-                return interaction.reply({
-                    content:
-                        `❌ تحيدات ليك **${roleName}**`,
-                    ephemeral: true
-                });
+                await sendLog(
+                    interaction.guild,
+                    "🎭 Role Removed",
+                    `${interaction.user.tag} → ${roleName}`
+                );
 
+                return interaction.editReply({
+                    content:
+                        `❌ تحيدات ليك **${roleName}**`
+                });
             }
 
             await interaction.member.roles.add(role);
-
-            await interaction.reply({
-                content:
-                    `✅ تزادت ليك **${roleName}**`,
-                ephemeral: true
-            });
 
             await sendLog(
                 interaction.guild,
@@ -504,6 +444,10 @@ client.on("interactionCreate", async interaction => {
                 `${interaction.user.tag} → ${roleName}`
             );
 
+            return interaction.editReply({
+                content:
+                    `✅ تزادت ليك **${roleName}**`
+            });
         }
 
         // CREATE TICKET
@@ -511,6 +455,9 @@ client.on("interactionCreate", async interaction => {
             interaction.isButton() &&
             interaction.customId === "create_ticket"
         ) {
+            await interaction.deferReply({
+                ephemeral: true
+            });
 
             const guild = interaction.guild;
 
@@ -521,24 +468,15 @@ client.on("interactionCreate", async interaction => {
             );
 
             if (existing) {
-
-                return interaction.reply({
+                return interaction.editReply({
                     content:
-                        `🎫 عندك Ticket مفتوح: ${existing}`,
-                    ephemeral: true
+                        `🎫 عندك Ticket مفتوح: ${existing}`
                 });
-
             }
-
-            const category = await guild.channels.create({
-                name: `🎫 ${interaction.user.username}`,
-                type: ChannelType.GuildCategory
-            });
 
             const ticket = await guild.channels.create({
                 name: `ticket-${interaction.user.id}`,
                 type: ChannelType.GuildText,
-                parent: category.id,
                 permissionOverwrites: [
                     {
                         id: guild.roles.everyone.id,
@@ -559,6 +497,7 @@ client.on("interactionCreate", async interaction => {
                         allow: [
                             PermissionsBitField.Flags.ViewChannel,
                             PermissionsBitField.Flags.SendMessages,
+                            PermissionsBitField.Flags.ReadMessageHistory,
                             PermissionsBitField.Flags.ManageChannels
                         ]
                     }
@@ -586,12 +525,16 @@ client.on("interactionCreate", async interaction => {
                 components: [row]
             });
 
-            await interaction.reply({
-                content:
-                    `✅ Ticket تفتح: ${ticket}`,
-                ephemeral: true
-            });
+            await sendLog(
+                guild,
+                "🎫 Ticket Created",
+                `${interaction.user.tag} فتح Ticket: ${ticket.name}`
+            );
 
+            return interaction.editReply({
+                content:
+                    `✅ Ticket تفتح: ${ticket}`
+            });
         }
 
         // CLOSE TICKET
@@ -599,44 +542,53 @@ client.on("interactionCreate", async interaction => {
             interaction.isButton() &&
             interaction.customId === "close_ticket"
         ) {
-
             if (
                 !interaction.member.permissions.has(
                     PermissionsBitField.Flags.ManageChannels
                 )
             ) {
-
                 return interaction.reply({
                     content:
                         "❌ غير Staff يقدر يسد Ticket.",
                     ephemeral: true
                 });
-
             }
 
             await interaction.reply(
                 "🔒 Ticket غادي يتسد..."
             );
 
-            setTimeout(() => {
+            await sendLog(
+                interaction.guild,
+                "🔒 Ticket Closed",
+                `${interaction.user.tag} سد Ticket.`
+            );
 
+            setTimeout(() => {
                 interaction.channel
                     .delete()
                     .catch(() => {});
-
             }, 3000);
-
         }
 
     } catch (error) {
+        console.log("❌ INTERACTION ERROR:", error);
 
-        console.log(
-            "INTERACTION ERROR:",
-            error
-        );
-
+        try {
+            if (interaction.deferred) {
+                await interaction.editReply({
+                    content:
+                        "❌ وقع مشكل فتنفيذ العملية."
+                });
+            } else if (!interaction.replied) {
+                await interaction.reply({
+                    content:
+                        "❌ وقع مشكل فتنفيذ العملية.",
+                    ephemeral: true
+                });
+            }
+        } catch {}
     }
-
 });
 
 // ==============================
@@ -644,59 +596,50 @@ client.on("interactionCreate", async interaction => {
 // ==============================
 
 client.on("messageCreate", async message => {
+    try {
+        if (message.author.bot) return;
+        if (!message.guild) return;
+        if (!message.content.startsWith(PREFIX)) return;
 
-    if (message.author.bot) return;
-    if (!message.guild) return;
+        const args = message.content
+            .slice(PREFIX.length)
+            .trim()
+            .split(/\s+/);
 
-    if (!message.content.startsWith(PREFIX)) return;
+        const command = args.shift()?.toLowerCase();
 
-    const args = message.content
-        .slice(PREFIX.length)
-        .trim()
-        .split(/\s+/);
+        // !ping
+        if (command === "ping") {
+            return message.reply("🏓 Pong !");
+        }
 
-    const command = args.shift()?.toLowerCase();
-
-    // PING
-    if (command === "ping") {
-
-        return message.reply("🏓 Pong !");
-
-    }
-
-    // MINECRAFT
-    if (command === "minecraft") {
-
-        const embed = new EmbedBuilder()
-            .setTitle("🟢 LMGHARBA Community — Minecraft Server")
-            .setDescription(
-                `🇲🇦 **مرحبا بكم فـ LMGHARBA Community!** 🇲🇦
+        // !minecraft
+        if (command === "minecraft") {
+            const embed = new EmbedBuilder()
+                .setTitle(
+                    "🟢 LMGHARBA Community — Minecraft Server"
+                )
+                .setDescription(
+                    `🇲🇦 **مرحبا بكم فـ LMGHARBA Community!** 🇲🇦
 
 🎮 **Minecraft Server: LmgharbaOneBlock**
 
-💻 **PC / Java:**
-
-> \`LmgharbaOneBlock.aternos.me\`
-
-📱 **Phone / Bedrock:**
-
-> **IP:** \`LmgharbaOneBlock.aternos.me\`
-> **Port:** \`19226\`
-
 🔥 **OneBlock • Survival • Community**
+
 👥 دخل لعب مع صحابك وعيشو المغامرة مع LMGHARBA!
 
-⚠️ تأكد من كتابة الـIP والـPort بشكل صحيح.
-
 🇲🇦 **LMGHARBA Community — ديما مجموعين!**`
-            );
+                )
+                .setTimestamp();
 
-        return message.channel.send({
-            embeds: [embed]
-        });
+            return message.channel.send({
+                embeds: [embed]
+            });
+        }
 
+    } catch (error) {
+        console.log("❌ COMMAND ERROR:", error);
     }
-
 });
 
 // ==============================
@@ -704,15 +647,11 @@ client.on("messageCreate", async message => {
 // ==============================
 
 client.on("error", error => {
-
     console.log("❌ Discord Error:", error);
-
 });
 
 process.on("unhandledRejection", error => {
-
     console.log("❌ Unhandled Rejection:", error);
-
 });
 
 // ==============================
@@ -720,13 +659,10 @@ process.on("unhandledRejection", error => {
 // ==============================
 
 if (!TOKEN) {
-
     console.log(
         "❌ TOKEN ما لقاهاش فـGitHub Secrets."
     );
-
     process.exit(1);
-
 }
 
 client.login(TOKEN);
